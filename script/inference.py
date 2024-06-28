@@ -4,6 +4,10 @@ import argparse
 import os
 from diffusers import DDIMScheduler
 import torch
+import torchvision
+import openvino as ov
+import time
+
 from said.model.diffusion import SAID_UNet1D
 from said.util.audio import fit_audio_unet, load_audio
 from said.util.blendshape import (
@@ -102,7 +106,7 @@ def main():
     parser.add_argument(
         "--device",
         type=str,
-        default="cuda:0",
+        default="gpu",
         help="GPU/CPU device",
     )
     parser.add_argument(
@@ -114,6 +118,31 @@ def main():
         "--mask_path",
         type=str,
         help="Path of the mask file (csv format)",
+    )
+
+    parser.add_argument(
+        "--use_ov",
+        type=bool,
+        default=False,
+        help="Use OV backend.",
+    )
+    parser.add_argument(
+        "--convert_model",
+        type=bool,
+        default=False,
+        help="Convert torch model to be IR files.",
+    )
+    parser.add_argument(
+        "--export_model",
+        type=bool,
+        default=False,
+        help="Export torch model to be onnx file",
+    )
+    parser.add_argument(
+        "--ov_model_path",
+        type=str,
+        default="./",
+        help="The location of OV models for read and export.",
     )
     args = parser.parse_args()
 
@@ -136,6 +165,14 @@ def main():
     save_intermediate = args.save_intermediate
     show_process = True
 
+    use_ov = args.use_ov
+    convert_model = args.convert_model
+    export_model = args.export_model
+    ov_model_path = args.ov_model_path
+
+    if convert_model or export_model:
+        use_ov = False
+
     # Load init sample
     init_sample_path = args.init_sample_path
     init_samples = None
@@ -153,9 +190,16 @@ def main():
         noise_scheduler=DDIMScheduler,
         feature_dim=unet_feature_dim,
         prediction_type=prediction_type,
+        device_name = device.upper(),
+        ov_model_path = ov_model_path,
+        use_ov = use_ov,
+        convert_model = convert_model,
+        export_model = export_model,
     )
-    said_model.load_state_dict(torch.load(weights_path, map_location=device))
-    said_model.to(device)
+
+    if use_ov == False:
+        said_model.load_state_dict(torch.load(weights_path, map_location=device))
+        said_model.to(device)
     said_model.eval()
 
     # Load data
@@ -168,9 +212,10 @@ def main():
     window_len = fit_output.window_size
 
     # Process the waveform
-    waveform_processed = said_model.process_audio(waveform).to(device)
+    waveform_processed = said_model.process_audio(waveform).to(device="cpu")
 
     # Inference
+    start_time = time.time()
     with torch.no_grad():
         output = said_model.inference(
             waveform_processed=waveform_processed,
@@ -184,6 +229,10 @@ def main():
             save_intermediate=save_intermediate,
             show_process=show_process,
         )
+    end_time = time.time()  # Record the end time
+    elapsed_time = (end_time - start_time) * 1000.0  # Calculate the elapsed time
+    print(f"Steps = {num_steps}, device = {device.upper()}")
+    print(f"Inference latency: {elapsed_time} ms")
 
     result = output.result[0, :window_len].cpu().numpy()
 

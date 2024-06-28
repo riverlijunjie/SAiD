@@ -183,9 +183,10 @@ class BasicTransformerBlock(nn.Module):
 
             for i in range(x_seq_len):
                 c_mid = (i + 0.5) * c_x_ratio
-                c_min = max(round(c_mid - c_kh_size), 0)
-                c_max = min(round(c_mid + c_kh_size), c_seq_len)
-
+                #print("c_mid = ",c_mid, ", c_kh_size = ", c_kh_size, ", c_seq_len = ", c_seq_len)
+                c_min = max(round(float(c_mid - c_kh_size)), 0)
+                c_max = min(round(float(c_mid + c_kh_size)), c_seq_len)
+                #print("align_bias.shape = ", align_bias.shape, ", c_min:c_max = ",c_min, "-", c_max)
                 align_bias[:, i, c_min:c_max] = False
 
         x = self.attn2(self.norm2(x), context=context, mask=align_bias) + x

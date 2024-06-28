@@ -46,6 +46,40 @@ python script/inference.py \
         [--mask_path "<input_mask>.csv"]  # Required for editing
 ```
 
+## Enable OpenVINO pipeline
+
+Install OpenVINO package
+
+```bash
+   python3 -m pip install openvino-dev[tensorflow2,onnx]
+```
+
+Convert torch file to be IR file
+
+```bash
+python3 script/inference.py \
+    --weights_path "<SAiD>.pth" \
+    --audio_path "<input_audio>.wav" \
+    --output_path "<output_coeffs>.csv" \
+    --device cpu \
+    --convert_model True \
+    --ov_model_path "ov_model_path" \
+    --num_steps 1
+```
+
+Run inference with OpenVINO
+
+```bash
+python3 script/inference.py \
+    --weights_path "<SAiD>.pth" \
+    --audio_path "<input_audio>.wav" \
+    --output_path "<output_coeffs>.csv" \
+    --device gpu.1 \
+    --use_ov True \
+    --ov_model_path "ov_model_path" \
+    --num_steps 200
+```
+
 ## BlendVOCA
 
 ### Construct Blendshape Facial Model
