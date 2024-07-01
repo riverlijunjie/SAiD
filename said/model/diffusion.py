@@ -197,18 +197,18 @@ class SAID(ABC, nn.Module):
                 torch.int64: ov.Type.i64,
                 torch.float64: ov.Type.f64,
             }
-            #dummy_inputs = (
-            #    torch.randn((2,192,32)),
-            #    torch.tensor([100, 100]),
-            #    torch.ones((2,192,768)),
-            #)
-            dummy_inputs = (noisy_samples, timesteps, audio_embedding)
 
+            dummy_inputs = (noisy_samples, timesteps, audio_embedding)
             input_info=[]
-            for input_tensor in dummy_inputs:
-                shape = ov.PartialShape(input_tensor.shape)
-                element_type = dtype_mapping[input_tensor.dtype]
-                input_info.append((shape, element_type))
+            if 0:
+                for input_tensor in dummy_inputs:
+                    shape = ov.PartialShape(input_tensor.shape)
+                    element_type = dtype_mapping[input_tensor.dtype]
+                    input_info.append((shape, element_type))
+            else:
+                input_info.append((ov.PartialShape([2,-1,32]), ov.Type.f32))
+                input_info.append((ov.PartialShape([2]), ov.Type.i64))
+                input_info.append((ov.PartialShape([2,-1,768]), ov.Type.f32))
             print("Convert UNet1DConditionModel to be IR ...", end="")
             with torch.no_grad():    
                 ov_model = ov.convert_model(self.denoiser, example_input=dummy_inputs, input=input_info)
@@ -306,13 +306,15 @@ class SAID(ABC, nn.Module):
             }
             dummy_inputs = (waveform)
             input_info=[]
-            for input_tensor in dummy_inputs:
-                shape = ov.PartialShape(input_tensor.shape)
-                element_type = dtype_mapping[input_tensor.dtype]
+            if 0:
+                shape = ov.PartialShape(waveform.shape)
+                element_type = dtype_mapping[waveform.dtype]
                 input_info.append((shape, element_type))
+            else:
+                input_info.append((ov.PartialShape([1,-1]), ov.Type.f32))
             print("Convert ModifiedWav2Vec2Model to be IR ...",end="")
             with torch.no_grad():    
-                ov_model = ov.convert_model(self.audio_encoder, example_input=dummy_inputs, input=[(1,61600),])
+                ov_model = ov.convert_model(self.audio_encoder, example_input=dummy_inputs, input=input_info)
             ov.save_model(ov_model, self.ov_model_path + "/ModifiedWav2Vec2Model.xml")
             del ov_model
             self.convert_audio_model = False
