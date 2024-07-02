@@ -20,6 +20,7 @@ from .unet_1d_condition import UNet1DConditionModel
 from .wav2vec2 import ModifiedWav2Vec2Model
 
 import openvino as ov
+from openvino.tools import mo
 enable_log = False
 
 @dataclass
@@ -64,7 +65,7 @@ class SAID(ABC, nn.Module):
         ov_model_path: str = "./",
         device_name: str = "GPU",
         convert_model: bool = False,
-        export_model: bool = False,
+        dynamic_shape: bool = False,
     ):
         """Constructor of SAID_UNet1D
 
@@ -96,16 +97,17 @@ class SAID(ABC, nn.Module):
 
         self.use_ov = use_ov
         self.convert_model = convert_model
-        self.export_model = export_model
         self.ov_model_path = ov_model_path
         self.convert_unet_model = False
         self.convert_audio_model = False
         self.device_name = device_name
+        self.dynamic_shape = dynamic_shape
+        self.count = 1
 
         if convert_model:
             self.convert_unet_model = True
             self.convert_audio_model = True
-        if use_ov == True:
+        if self.use_ov == True:
             print("ov::compiled_model: ", self.ov_model_path + "/ModifiedWav2Vec2Model.onnx, device_name = ", self.device_name, " ...", end="")
             core = ov.Core()
             self.ov_audio_encoder = core.compile_model(self.ov_model_path + "/ModifiedWav2Vec2Model.xml",self.device_name, config={'CACHE_DIR': self.ov_model_path})
@@ -113,6 +115,7 @@ class SAID(ABC, nn.Module):
             print("input:",self.ov_audio_encoder.inputs)
             print("output:",self.ov_audio_encoder.outputs)
             print()
+            self.audio_encoder = ModifiedWav2Vec2Model(self.audio_config)
         else:
             self.audio_encoder = ModifiedWav2Vec2Model(self.audio_config)
 
@@ -182,15 +185,47 @@ class SAID(ABC, nn.Module):
 
         if enable_log == True:
             print("denoiser: ", noisy_samples.shape, timesteps, audio_embedding.shape)
-        #denoiser:  torch.Size([2, 231, 32]) tensor([900, 900]) torch.Size([2, 231, 768])
+
+        '''
+        pt_name =  self.ov_model_path + "/original_UNet1D_input_A_"+str(self.count)+"_tensor.pt"
+        noisy_samples = torch.load(pt_name)
+        pt_name =  self.ov_model_path + "/original_UNet1D_input_B_"+str(self.count)+"_tensor.pt"
+        timesteps = torch.load(pt_name)
+        pt_name =  self.ov_model_path + "/original_UNet1D_input_C_"+str(self.count)+"_tensor.pt"
+        audio_embedding = torch.load(pt_name)
+        '''
 
         if self.use_ov == True:
+            '''
+            pt_name =  self.ov_model_path + "/ov_"+self.device_name+"_UNet1D_input_A_"+str(self.count)+"_tensor.pt"
+            torch.save(noisy_samples, pt_name)
+            pt_name =  self.ov_model_path + "/ov_"+self.device_name+"_UNet1D_input_B_"+str(self.count)+"_tensor.pt"
+            torch.save(timesteps, pt_name)
+            pt_name =  self.ov_model_path + "/ov_"+self.device_name+"_UNet1D_input_C_"+str(self.count)+"_tensor.pt"
+            torch.save(audio_embedding, pt_name)
+            '''
             name = self.ov_denoiser.output(0)
             noise_pred = self.ov_denoiser([noisy_samples, timesteps, audio_embedding])[name]
             noise_pred = torch.tensor(noise_pred)
+            '''
+            pt_name =  self.ov_model_path + "/ov_"+self.device_name+"_UNet1D_output_"+str(self.count)+"_tensor.pt"
+            torch.save(noise_pred, pt_name)
+            '''
         else:
+            '''
+            pt_name =  self.ov_model_path + "/original_UNet1D_input_A_"+str(self.count)+"_tensor.pt"
+            torch.save(noisy_samples, pt_name)
+            pt_name =  self.ov_model_path + "/original_UNet1D_input_B_"+str(self.count)+"_tensor.pt"
+            torch.save(timesteps, pt_name)
+            pt_name =  self.ov_model_path + "/original_UNet1D_input_C_"+str(self.count)+"_tensor.pt"
+            torch.save(audio_embedding, pt_name)
+            '''
             noise_pred = self.denoiser(noisy_samples, timesteps, audio_embedding)
-
+            '''
+            pt_name =  self.ov_model_path + "/original_UNet1D_output_"+str(self.count)+"_tensor.pt"
+            torch.save(noise_pred, pt_name)
+            '''
+        self.count +=1
         if self.convert_unet_model == True:
             dtype_mapping = {
                 torch.float32: ov.Type.f32,
@@ -200,7 +235,7 @@ class SAID(ABC, nn.Module):
 
             dummy_inputs = (noisy_samples, timesteps, audio_embedding)
             input_info=[]
-            if 0:
+            if self.dynamic_shape == False:
                 for input_tensor in dummy_inputs:
                     shape = ov.PartialShape(input_tensor.shape)
                     element_type = dtype_mapping[input_tensor.dtype]
@@ -291,12 +326,26 @@ class SAID(ABC, nn.Module):
         """
         print("audio_encoder: ", waveform.shape, num_frames)
         if self.use_ov == True:
-            if enable_log == True:
-                print("ov::inference audio_encoder...")
+            '''
+            pt_name =  self.ov_model_path + "/ov_"+self.device_name+"_audio_encoder_input_"+str(self.count)+"_tensor.pt"
+            torch.save(waveform, pt_name)
+            '''
             features = self.ov_audio_encoder(waveform)[self.ov_audio_encoder.output(0)]
             features = torch.tensor(features)
+            
+            pt_name =  self.ov_model_path + "/ov_"+self.device_name+"_audio_encoder_output_"+str(self.count)+"_tensor.pt"
+            torch.save(features, pt_name)
+            
         else:
+            '''
+            pt_name =  self.ov_model_path + "/original_audio_encoder_input_"+str(self.count)+"_tensor.pt"
+            torch.save(waveform, pt_name)
+            '''
             features = self.audio_encoder(waveform).last_hidden_state
+            
+            pt_name =  self.ov_model_path + "/original_audio_encoder_output_"+str(self.count)+"_tensor.pt"
+            torch.save(features, pt_name)
+            
 
         if self.convert_audio_model == True:
             dtype_mapping = {
@@ -306,7 +355,7 @@ class SAID(ABC, nn.Module):
             }
             dummy_inputs = (waveform)
             input_info=[]
-            if 0:
+            if self.dynamic_shape == False:
                 shape = ov.PartialShape(waveform.shape)
                 element_type = dtype_mapping[waveform.dtype]
                 input_info.append((shape, element_type))
@@ -314,7 +363,7 @@ class SAID(ABC, nn.Module):
                 input_info.append((ov.PartialShape([1,-1]), ov.Type.f32))
             print("Convert ModifiedWav2Vec2Model to be IR ...",end="")
             with torch.no_grad():    
-                ov_model = ov.convert_model(self.audio_encoder, example_input=dummy_inputs, input=input_info)
+                ov_model = mo.convert_model(self.audio_encoder, example_input=dummy_inputs, input=input_info, compress_to_fp16=True)
             ov.save_model(ov_model, self.ov_model_path + "/ModifiedWav2Vec2Model.xml")
             del ov_model
             self.convert_audio_model = False
@@ -322,6 +371,14 @@ class SAID(ABC, nn.Module):
 
         if self.feature_dim > 0:
             features = self.audio_proj_layer(features)
+        '''
+        if self.use_ov == True:
+            pt_name =  self.ov_model_path + "/ov_"+self.device_name+"_audio_encoder_output_A_"+str(self.count)+"_tensor.pt"
+            torch.save(features, pt_name)
+        else:
+            pt_name =  self.ov_model_path + "/original_audio_encoder_output_A"+str(self.count)+"_tensor.pt"
+            torch.save(features, pt_name)
+        '''
         return features
 
     def get_random_timesteps(self, batch_size: int) -> torch.LongTensor:
@@ -467,6 +524,15 @@ class SAID(ABC, nn.Module):
         init_latents = latents.clone()
         init_timestep = min(int(num_inference_steps * strength), num_inference_steps)
 
+        """
+        if self.use_ov == True:
+            pt_name =  self.ov_model_path + "/ov_"+self.device_name+"_latents_"+str(self.count)+"_tensor.pt"
+            torch.save(latents, pt_name)
+        else:
+            pt_name =  self.ov_model_path + "/original_latents"+str(self.count)+"_tensor.pt"
+            torch.save(latents, pt_name)
+        """
+                
         # Add additional noise
         noise = None
         if init_samples is not None:
@@ -564,14 +630,6 @@ class SAID(ABC, nn.Module):
         # Re-scaling & clipping the latent
         result = self.decode_latent(latents / self.latent_scale).clamp(0, 1)
 
-        if self.export_model == True:
-            print("Export torch model to be ModifiedWav2Vec2Model.onnx ...")
-            torch.onnx.export(self.audio_encoder, (torch.rand(1, 61600), ), self.ov_model_path + '/ModifiedWav2Vec2Model.onnx')
-            print("Export torch model to be UNet1DConditionModel.onnx ...", end="")
-            torch.onnx.export(self.denoiser, (torch.rand(2,231,32), torch.tensor([100, 100]), torch.rand(2,231,768),), 
-                             self.ov_model_path + '/UNet1DConditionModel.onnx')
-            print(" done")
-            self.export_model = False
         return SAIDInferenceOutput(result=result, intermediates=intermediates)
 
 
@@ -592,7 +650,7 @@ class SAID_UNet1D(SAID):
         ov_model_path: str = "./",
         device_name: str = "GPU",
         convert_model: bool = False,
-        export_model: bool = False,
+        dynamic_shape: bool = False,
     ):
         """Constructor of SAID_UNet1D
 
@@ -627,7 +685,7 @@ class SAID_UNet1D(SAID):
             ov_model_path= ov_model_path,
             device_name=device_name,
             convert_model=convert_model,
-            export_model=export_model,
+            dynamic_shape=dynamic_shape,
         )
 
         # Denoiser

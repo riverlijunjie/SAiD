@@ -33,9 +33,6 @@ class UNet1DConditionModel(nn.Module):
         self.out_channels = out_channels
         self.cross_attention_dim = cross_attention_dim
 
-        #self.ov_model = None,
-        #core = ov.Core()
-        #self.ov_model = core.compile_model("/home/openvino-ci-89/river/models/SAiD/UNet1DConditionModel.xml","CPU")
         self.model = UNetModel(
             dims=1,
             in_channels=self.in_channels,
@@ -74,32 +71,7 @@ class UNet1DConditionModel(nn.Module):
             (Batch_size, sample_seq_len, channel), Predicted noise
         """
         out = sample.transpose(1, 2)
-        #out_ =out.clone()
-        #if self.ov_model is not None:
-        #    out = self.ov_model(out, timestep, encoder_hidden_states)
-        #else:
         out = self.model(out, timestep, encoder_hidden_states)
-
-        if 0:
-            dtype_mapping = {
-                torch.float32: ov.Type.f32,
-                torch.int64: ov.Type.i64,
-                torch.float64: ov.Type.f64,
-            }
-    
-            dummy_inputs = (out_, timestep, encoder_hidden_states)
-
-            input_info=[]
-            for input_tensor in dummy_inputs:
-                shape = ov.PartialShape(input_tensor.shape)
-                element_type = dtype_mapping[input_tensor.dtype]
-                input_info.append((shape, element_type))
-            with torch.no_grad():    
-                ov_model = ov.convert_model(self.model, example_input=dummy_inputs, input=input_info)
-            ov.save_model(ov_model, "UNet1DConditionModel.xml")
-            del ov_model
-            print("ov_model is done!")
-
         out = out.transpose(1, 2)
 
         return out

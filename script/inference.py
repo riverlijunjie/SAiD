@@ -132,17 +132,19 @@ def main():
         default=False,
         help="Convert torch model to be IR files.",
     )
-    parser.add_argument(
-        "--export_model",
-        type=bool,
-        default=False,
-        help="Export torch model to be onnx file",
-    )
+
     parser.add_argument(
         "--ov_model_path",
         type=str,
         default="./",
         help="The location of OV models for read and export.",
+    )
+    
+    parser.add_argument(
+        "--dynamic_shape",
+        type=bool,
+        default=False,
+        help="Convert model with dynamic shape.",
     )
     args = parser.parse_args()
 
@@ -167,10 +169,10 @@ def main():
 
     use_ov = args.use_ov
     convert_model = args.convert_model
-    export_model = args.export_model
     ov_model_path = args.ov_model_path
+    dynamic_shape = args.dynamic_shape
 
-    if convert_model or export_model:
+    if convert_model:
         use_ov = False
 
     # Load init sample
@@ -194,10 +196,13 @@ def main():
         ov_model_path = ov_model_path,
         use_ov = use_ov,
         convert_model = convert_model,
-        export_model = export_model,
+        dynamic_shape = dynamic_shape,
     )
 
-    if use_ov == False:
+    if use_ov == True:
+        said_model.load_state_dict(torch.load(weights_path, map_location="cpu"))
+        said_model.to("cpu")
+    else:
         said_model.load_state_dict(torch.load(weights_path, map_location=device))
         said_model.to(device)
     said_model.eval()
