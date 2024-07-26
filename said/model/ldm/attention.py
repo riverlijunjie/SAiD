@@ -159,34 +159,42 @@ class BasicTransformerBlock(nn.Module):
 
         self.pad = pad
 
-    def forward(self, x, context=None):
+    def forward(self, x, context=None, bias_mask=None):
         return checkpoint(
-            self._forward, (x, context), self.parameters(), self.checkpoint
+            self._forward, (x, context, bias_mask), self.parameters(), self.checkpoint
         )
 
-    def _forward(self, x, context=None):
+    def _forward(self, x, context=None, bias_mask=None):
         x = self.attn1(self.norm1(x)) + x
 
         # Alignment bias for aligning the sequences
         align_bias = None
+        if True:
+            if exists(context):
+                batch_size = x.shape[0]
+                x_seq_len = x.shape[1]
+                c_seq_len = context.shape[1]
+
+                c_x_ratio = c_seq_len / x_seq_len
+                c_kh_size = c_x_ratio / 2 + self.pad
+
+                align_bias = torch.ones(
+                    batch_size, x_seq_len, c_seq_len, dtype=torch.bool, device=x.device
+                )
+                #print("BasicTransformerBlock: x_seq_len = ", x_seq_len, ", shape(x) = ", x.shape)
+                for i in range(x_seq_len):
+                    c_mid = (i + 0.5) * c_x_ratio
+                    c_min = max(round(float(c_mid - c_kh_size)), 0)
+                    c_max = min(round(float(c_mid + c_kh_size)), c_seq_len)
+                    align_bias[:, i, c_min:c_max] = False
+            if torch.equal(bias_mask,align_bias) == False:
+                print("Compute bias is wrong")
+
         if exists(context):
-            batch_size = x.shape[0]
-            x_seq_len = x.shape[1]
-            c_seq_len = context.shape[1]
-
-            c_x_ratio = c_seq_len / x_seq_len
-            c_kh_size = c_x_ratio / 2 + self.pad
-
-            align_bias = torch.ones(
-                batch_size, x_seq_len, c_seq_len, dtype=torch.bool, device=x.device
-            )
-
-            for i in range(x_seq_len):
-                c_mid = (i + 0.5) * c_x_ratio
-                c_min = max(round(c_mid - c_kh_size), 0)
-                c_max = min(round(c_mid + c_kh_size), c_seq_len)
-
-                align_bias[:, i, c_min:c_max] = False
+            assert (
+                bias_mask is not None
+            ), "Fool!! You forgot to provide bias_mask..."
+            align_bias = bias_mask
 
         x = self.attn2(self.norm2(x), context=context, mask=align_bias) + x
         x = self.ff(self.norm3(x)) + x
@@ -220,7 +228,7 @@ class SpatialTransformer(nn.Module):
 
         self.proj_out = zero_module(conv_nd(1, in_channels, in_channels, 1))
 
-    def forward(self, x, context=None):
+    def forward(self, x, context=None, bias_mask=None):
         # note: if no context is given, cross-attention defaults to self-attention
         b, c, *spatial = x.shape
         x = x.reshape(b, c, -1)
@@ -228,7 +236,7 @@ class SpatialTransformer(nn.Module):
         x = self.norm(x)
         x = rearrange(x, "b c t -> b t c")
         for block in self.transformer_blocks:
-            x = block(x, context=context)
+            x = block(x, context=context, bias_mask=bias_mask)
         x = rearrange(x, "b t c -> b c t")
         x = self.proj_out(x)
         return (x + x_in).reshape(b, c, *spatial)

@@ -3,7 +3,7 @@
 import torch
 from torch import nn
 from .ldm.openaimodel import UNetModel
-
+import openvino as ov
 
 class UNet1DConditionModel(nn.Module):
     """Conditional 1D UNet model"""
@@ -53,6 +53,7 @@ class UNet1DConditionModel(nn.Module):
         sample: torch.FloatTensor,
         timestep: torch.Tensor,
         encoder_hidden_states: torch.Tensor,
+        bias_mask: torch.Tensor,
     ) -> torch.FloatTensor:
         """Denoise the input sample
 
@@ -70,8 +71,9 @@ class UNet1DConditionModel(nn.Module):
         torch.FloatTensor
             (Batch_size, sample_seq_len, channel), Predicted noise
         """
+        # print("UNetModel: sample = ", sample.shape, ", timestep = ", timestep.shape, ", encoder_hidden_states = ", encoder_hidden_states.shape)
         out = sample.transpose(1, 2)
-        out = self.model(out, timestep, encoder_hidden_states)
+        out = self.model(out, timestep, encoder_hidden_states, bias_mask)
         out = out.transpose(1, 2)
 
         return out
