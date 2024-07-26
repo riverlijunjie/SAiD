@@ -62,9 +62,18 @@ python3 script/inference.py \
     --audio_path "<input_audio>.wav" \
     --output_path "<output_coeffs>.csv" \
     --device cpu \
+    --dynamic_shape True \
     --convert_model True \
-    --ov_model_path "ov_model_path" \
+    --ov_model_path "<ov_model_path>" \
     --num_steps 1
+```
+
+Then you will see generated IR files in <ov_model_path>:
+```
+-rw-rw-r-- 1 openvino-ci-74 openvino-ci-74 188741872  7月 26 18:04 ModifiedWav2Vec2Model.bin
+-rw-rw-r-- 1 openvino-ci-74 openvino-ci-74    532793  7月 26 18:04 ModifiedWav2Vec2Model.xml
+-rw-rw-r-- 1 openvino-ci-74 openvino-ci-74  13986042  7月 26 18:04 UNet1DConditionModel.bin
+-rw-rw-r-- 1 openvino-ci-74 openvino-ci-74    552604  7月 26 18:04 UNet1DConditionModel.xml
 ```
 
 Run inference with OpenVINO
@@ -76,9 +85,20 @@ python3 script/inference.py \
     --output_path "<output_coeffs>.csv" \
     --device gpu.1 \
     --use_ov True \
-    --ov_model_path "ov_model_path" \
+    --ov_model_path "<ov_model_path>" \
     --num_steps 200
+
+ov::compiled_model:  /home/openvino-ci-74/river/SAiD/dynamic_models_1/UNet1DConditionModel.xml, device_name =  GPU.1  ...done
+input: [<ConstOutput: names[sample] shape[2,?,32] type: f32>, <ConstOutput: names[56, timestep] shape[2] type: i64>, <ConstOutput: names[encoder_hidden_states] shape[2,?,768] type: f32>, <ConstOutput: names[bias_mask] shape[2,?,?] type: boolean>]
+output: [<ConstOutput: names[] shape[2,1..,32] type: f32>]
+
+100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 200/200 [00:00<00:00, 241.34it/s]
+Steps = 200, device = GPU.1
+Inference latency: 926.8906116485596 ms
+
 ```
+
+
 
 ## BlendVOCA
 
