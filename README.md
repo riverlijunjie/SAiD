@@ -62,6 +62,7 @@ python3 script/inference.py \
     --audio_path "<input_audio>.wav" \
     --output_path "<output_coeffs>.csv" \
     --device cpu \
+    --dynamic_shape True \
     --convert_model True \
     --ov_model_path "ov_model_path" \
     --num_steps 1
